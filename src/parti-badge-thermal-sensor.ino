@@ -86,9 +86,10 @@ const unsigned char humidityImage[] = {
 
 // Initialize Si7021 sensor
 Adafruit_Si7021 envSensor = Adafruit_Si7021();
-int currentTemp;
-int currentHumidity;
-int currentBatteryReading;
+float currentTemp;
+float currentHumidity;
+int currentTempRounded;
+int currentHumidityRounded;
 
 // Init Display
 Adafruit_SSD1306 display(RESET);
@@ -99,19 +100,35 @@ unsigned long startTime = 0;
 unsigned long previousEnvReading = 0;
 
 /* General Macros */
-#define TEMP_CHECK_INTERVAL 500
+#define TEMP_CHECK_INTERVAL 1000
 
 // Get temp and humidity from the sensors
 void getTempAndHumidity() {
-  int prevTemp = currentTemp;
-  int prevHumidity = currentHumidity;
+  int prevRoundedTemp = currentTempRounded;
+  int prevRoundedHumidity = currentHumidityRounded;
 
-  currentTemp = round((envSensor.readTemperature() * 1.8 + 32.00) * 10) / 10;
-  currentHumidity = round(envSensor.readHumidity() * 10) / 10;
+  currentTemp = envSensor.readTemperature() * 1.8 + 32.00;
+  currentHumidity = envSensor.readHumidity();
+
+  currentTempRounded = round((currentTemp) * 10) / 10;
+  currentHumidityRounded = round(currentHumidity * 10) / 10;
 
   // If either has changed and these values are being displayed, update the display
-  if (prevTemp != currentTemp || prevHumidity != currentHumidity) {
+  if (prevRoundedTemp != currentTempRounded) {
     showTempAndHumidity();
+    String tempData = String(currentTemp, 2);
+    // Particle.publish("temperature-data", tempData, PRIVATE);
+
+    String change = "no change";
+    if (currentTempRounded > prevRoundedTemp) {
+      change = String(currentTempRounded-prevRoundedTemp);
+      // Particle.publish("temp-up", change, PRIVATE);
+      Particle.publish("temp-up", tempData, PRIVATE);
+    } else if (currentTempRounded < prevRoundedTemp) {
+      change = String(prevRoundedTemp-currentTempRounded);
+      // Particle.publish("temp-down", change, PRIVATE);
+      Particle.publish("temp-down", tempData, PRIVATE);
+    }
   }
 
   // showTempAndHumidity();
@@ -137,13 +154,13 @@ void showTempAndHumidity() {
   display.println("Temp");
   display.setTextSize(2);
 
-  // Rounded 
-  // display.setCursor(48, 25);
-  // display.print((int)currentTemp);
-
   // Decimal
   display.setCursor(35, 25);
-  display.print(envSensor.readTemperature() * 1.8 + 32.00, 2);
+  display.print(currentTemp, 2);
+
+  // Rounded 
+  // display.setCursor(48, 25);
+  // display.print((int)currentTempRounded);
 
   display.println("f");
   display.setTextSize(1);
@@ -152,13 +169,13 @@ void showTempAndHumidity() {
 
   display.setTextSize(2);
 
-  // Rounded
-  // display.setCursor(48, 50);
-  // display.print((int)currentHumidity);
-
   // Decimal
   display.setCursor(35, 50);
-  display.print(envSensor.readHumidity(), 2);
+  display.print(currentHumidity, 2);
+
+  // Rounded
+  // display.setCursor(48, 50);
+  // display.print((int)currentHumidityRounded);
 
   display.println("%");
 
@@ -175,8 +192,8 @@ int checkTempHandler(String data) {
 }
 
 void setup() {
-  Particle.variable("currentTemp", currentTemp);
-  Particle.variable("currentHu", currentHumidity);
+  Particle.variable("currentTemp", currentTempRounded);
+  Particle.variable("currentHu", currentHumidityRounded);
   Particle.function("checkTemp", checkTempHandler);
 
   Serial.begin();
